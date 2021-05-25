@@ -23,7 +23,7 @@ set(CMAKE_C_COMPILER ${COMPILER})
 option(BUILD_DSP_LIB OFF)
 
 #build dsp library
-if(BUILD_DSP_LIB)
+
 set(ROOT ${CMAKE_SOURCE_DIR}/CMSIS_5)
 message( STATUS ${ROOT})
 set(DSP ${ROOT}/CMSIS/DSP)
@@ -32,7 +32,7 @@ add_subdirectory("${DSP}/Source" bin_dsp)
 
 function(compilerSpecificCompileOptions PROJECTNAME ROOT)
 endfunction()
-endif(BUILD_DSP_LIB)
+
 
 #FREE
 set(FREERTOS_PATH ${CMAKE_SOURCE_DIR}/FreeRTOS)
@@ -64,6 +64,7 @@ ${FREERTOS_PATH}/Source/*.c
     )
 include_directories(
     RTOS_INCLUDE
+    ${CMAKE_SOURCE_DIR}/linux_sim
     ${FREERTOS_PATH}/Source
     ${FREERTOS_PATH}/Source/include
     ${FREERTOS_PATH}/Source/portable/ThirdParty/GCC/Posix
@@ -80,7 +81,7 @@ endif()
 if(MINGW)
 
 set(win_simulation simulation)
-add_executable(${win_simulation} ${CMAKE_SOURCE_DIR}/windows_sim/main.c  ${RTOS_INCLUDE} ${RTOS_SOURCE_FILE})
+add_executable(${win_simulation} ${CMAKE_SOURCE_DIR}/main.c  ${RTOS_INCLUDE} ${RTOS_SOURCE_FILE})
 
 target_compile_definitions(${win_simulation} PRIVATE
     -DprojCOVERAGE_TEST=1
@@ -94,8 +95,8 @@ ${win_simulation} PRIVATE
 
 elseif(UNIX)
 
-set(linux_simulation simulation)
-add_executable(${linux_simulation} ${CMAKE_SOURCE_DIR}/windows_sim/main.c  ${RTOS_INCLUDE} ${RTOS_SOURCE_FILE})
+set(linux_simulation simulation.out)
+add_executable(${linux_simulation} ${CMAKE_SOURCE_DIR}/main.c  ${RTOS_INCLUDE} ${RTOS_SOURCE_FILE})
 
 target_compile_definitions(${linux_simulation} PRIVATE
     -DprojCOVERAGE_TEST=1
@@ -106,7 +107,7 @@ target_compile_definitions(${linux_simulation} PRIVATE
 target_link_libraries(
 ${linux_simulation} PRIVATE
      pthread
-    m
+     CMSISDSP
 )
 
 endif()

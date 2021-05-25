@@ -1,117 +1,38 @@
-/*
- * FreeRTOS V202104.00
- * Copyright (C) 2020 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of
- * this software and associated documentation files (the "Software"), to deal in
- * the Software without restriction, including without limitation the rights to
- * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
- * the Software, and to permit persons to whom the Software is furnished to do so,
- * subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
- * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
- * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *
- * http://www.FreeRTOS.org
- * http://aws.amazon.com/freertos
- *
- * 1 tab == 4 spaces!
- */
-
-/******************************************************************************
- * This project provides two demo applications.  A simple blinky style project,
- * and a more comprehensive test and demo application.  The
- * mainCREATE_SIMPLE_BLINKY_DEMO_ONLY setting is used to select between the two.
- * The simply blinky demo is implemented and described in main_blinky.c.  The
- * more comprehensive test and demo application is implemented and described in
- * main_full.c.
- *
- * This file implements the code that is not demo specific, including the
- * hardware setup and FreeRTOS hook functions.
- *
- *******************************************************************************
- * NOTE: Windows will not be running the FreeRTOS demo threads continuously, so
- * do not expect to get real time behaviour from the FreeRTOS Windows port, or
- * this demo application.  Also, the timing information in the FreeRTOS+Trace
- * logs have no meaningful units.  See the documentation page for the Windows
- * port for further information:
- * http://www.freertos.org/FreeRTOS-Windows-Simulator-Emulator-for-Visual-Studio-and-Eclipse-MingW.html
- *
-
- *
- *******************************************************************************
- */
-
-/* Standard includes. */
 #include <stdio.h>
 #include <stdlib.h>
+#include "FreeRTOS.h"		/* RTOS firmware */
+
+
+
+////////////////////////////////////////////////
+#ifdef __linux__
+#include "arm_math.h"
+#include "stdint.h"
+#include "semphr.h"
+
+#define CH3_TASKMANAGEMENT
+#ifdef CH3_TASKMANAGEMENT
+void vTask1(void*);
+void vTask2(void*);
+void vTask3(void*);
+void vTask4(void*);
+#endif(CH3_TASKMANAGEMENT)
+void vApplicationIdleHook(void);
+void vApplicationTickHook(void);
+void RTOS_START(void);
+SemaphoreHandle_t xSemaphore=NULL;
+#endif
+////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////
+#ifdef __MINGW32__
 #include <conio.h>
-
-/* FreeRTOS kernel includes. */
-#include "FreeRTOS.h"
 #include "task.h"
-
-/* This project provides two demo applications.  A simple blinky style demo
-application, and a more comprehensive test and demo application.  The
-mainCREATE_SIMPLE_BLINKY_DEMO_ONLY setting is used to select between the two.
-
-If mainCREATE_SIMPLE_BLINKY_DEMO_ONLY is 1 then the blinky demo will be built.
-The blinky demo is implemented and described in main_blinky.c.
-
-If mainCREATE_SIMPLE_BLINKY_DEMO_ONLY is not 1 then the comprehensive test and
-demo application will be built.  The comprehensive test and demo application is
-implemented and described in main_full.c. */
-#define mainCREATE_SIMPLE_BLINKY_DEMO_ONLY	0
-
-/* This demo uses heap_5.c, and these constants define the sizes of the regions
-that make up the total heap.  heap_5 is only used for test and example purposes
-as this demo could easily create one large heap region instead of multiple
-smaller heap regions - in which case heap_4.c would be the more appropriate
-choice.  See http://www.freertos.org/a00111.html for an explanation. */
 #define mainREGION_1_SIZE	10801
 #define mainREGION_2_SIZE	29905
 #define mainREGION_3_SIZE	6007
-
-/*-----------------------------------------------------------*/
-
-/*
- * main_blinky() is used when mainCREATE_SIMPLE_BLINKY_DEMO_ONLY is set to 1.
- * main_full() is used when mainCREATE_SIMPLE_BLINKY_DEMO_ONLY is set to 0.
- */
-extern void main_blinky( void );
-extern void main_full( void );
-
-/*
- * Only the comprehensive demo uses application hook (callback) functions.  See
- * http://www.freertos.org/a00016.html for more information.
- */
-void vFullDemoTickHookFunction( void );
-void vFullDemoIdleFunction( void );
-
-/*
- * This demo uses heap_5.c, so start by defining some heap regions.  It is not
- * necessary for this demo to use heap_5, as it could define one large heap
- * region.  Heap_5 is only used for test and example purposes.  See
- * http://www.freertos.org/a00111.html for an explanation.
- */
-
-/*
- * Performs a few sanity checks on the behaviour of the vPortGetHeapStats()
- * function.
- */
-static void prvExerciseHeapStats( void );
-
-/*
- * Prototypes for the standard FreeRTOS application hook (callback) functions
- * implemented within this file.  See http://www.freertos.org/a00016.html .
- */
+#define mainCREATE_SIMPLE_BLINKY_DEMO_ONLY	0
 void vApplicationMallocFailedHook( void );
 void vApplicationIdleHook( void );
 void vApplicationStackOverflowHook( TaskHandle_t pxTask, char *pcTaskName );
@@ -119,46 +40,19 @@ void vApplicationTickHook( void );
 void vApplicationGetIdleTaskMemory( StaticTask_t **ppxIdleTaskTCBBuffer, StackType_t **ppxIdleTaskStackBuffer, uint32_t *pulIdleTaskStackSize );
 void vApplicationGetTimerTaskMemory( StaticTask_t **ppxTimerTaskTCBBuffer, StackType_t **ppxTimerTaskStackBuffer, uint32_t *pulTimerTaskStackSize );
 
-/*
- * Writes trace data to a disk file when the trace recording is stopped.
- * This function will simply overwrite any trace files that already exist.
- */
+extern void main_blinky( void );
+extern void main_full( void );
+void vFullDemoTickHookFunction( void );
+void vFullDemoIdleFunction( void );
+static void prvExerciseHeapStats( void );
 static void prvSaveTraceFile( void );
-
-/*-----------------------------------------------------------*/
-
-/* When configSUPPORT_STATIC_ALLOCATION is set to 1 the application writer can
-use a callback function to optionally provide the memory required by the idle
-and timer tasks.  This is the stack that will be used by the timer task.  It is
-declared here, as a global, so it can be checked by a test that is implemented
-in a different file. */
 StackType_t uxTimerTaskStack[ configTIMER_TASK_STACK_DEPTH ];
-
-/* Notes if the trace is running or not. */
 static BaseType_t xTraceRunning = pdTRUE;
-
-/*-----------------------------------------------------------*/
 BaseType_t task_ret;
-
-void ss_task(){
-
-    while(1){
-
-
-        printf("test\n");
-        vTaskDelay(1000);
-    }
-
-}
-void RTOS_START(){
-    task_ret = xTaskCreate(ss_task, "ss task", 100, NULL, 1, NULL );
-
-    if(task_ret !=pdTRUE){
-        printf("sensor task create failed\n");
-        while(1);
-    }
-     vTaskStartScheduler();
-}
+void ss_task(void);
+void RTOS_START(void);
+#endif
+////////////////////////////////////////////////
 
 
 int main( void )
@@ -166,13 +60,26 @@ int main( void )
     /* This demo uses heap_5.c, so start by defining some heap regions.  heap_5
     is only used for test and example reasons.  Heap_4 is more appropriate.  See
     http://www.freertos.org/a00111.html for an explanation. */
-
-
     RTOS_START();
-
     return 0;
 }
 /*-----------------------------------------------------------*/
+//////////////////////////////////////////////////
+#ifdef __MINGW32__
+void ss_task(void){
+    while(1){
+        printf("test\n");
+        vTaskDelay(1000);
+    }
+}
+void RTOS_START(void){
+    task_ret = xTaskCreate(ss_task, "ss task", 100, NULL, 1, NULL );
+    if(task_ret !=pdTRUE){
+        printf("sensor task create failed\n");
+        while(1);
+    }
+     vTaskStartScheduler();
+}
 
 void vApplicationMallocFailedHook( void )
 {
@@ -404,7 +311,6 @@ void vApplicationGetTimerTaskMemory( StaticTask_t **ppxTimerTaskTCBBuffer, Stack
 function then they must be declared static - otherwise they will be allocated on
 the stack and so not exists after this function exits. */
 static StaticTask_t xTimerTaskTCB;
-
     /* Pass out a pointer to the StaticTask_t structure in which the Timer
     task's state will be stored. */
     *ppxTimerTaskTCBBuffer = &xTimerTaskTCB;
@@ -417,3 +323,57 @@ static StaticTask_t xTimerTaskTCB;
     configMINIMAL_STACK_SIZE is specified in words, not bytes. */
     *pulTimerTaskStackSize = configTIMER_TASK_STACK_DEPTH;
 }
+
+#endif
+/////////////////////////////////////////////////
+/////////////////////////////////////////////////
+#ifdef __linux__
+void RTOS_START(void){
+    xTaskCreate( vTask3, "Task 3", 1000, NULL, 1, NULL );
+    xTaskCreate( vTask4, "Task 4", 1000, NULL, 1, NULL );
+    vTaskStartScheduler();
+}
+#ifdef CH3_TASKMANAGEMENT
+float32_t a[100];
+void vTask1(void* parameter)
+{
+    while(1){
+        printf("Task 1\n");
+        vTaskDelay(pdMS_TO_TICKS(250));
+    }
+}
+void vTask2(void* parameter)
+{
+    while(1){
+        printf("Task 2\n");
+        vTaskDelay(pdMS_TO_TICKS(250));
+    }
+}
+void vTask3(void* parameter)
+{
+    TickType_t xLastWaketime = xTaskGetTickCount();
+    //ls1.head = NULL;
+    while(1){
+        printf("hello\n");
+        vTaskDelayUntil(&xLastWaketime, pdMS_TO_TICKS(1000));
+    }
+}
+
+void vTask4(void* parameter)
+{
+    while(1){
+        vTaskDelay(100);
+    }
+}
+#endif(CH3_TASKMANAGEMENT)
+/* CH3_TASKMANAGEMENT ends */
+
+void vApplicationTickHook(void){}
+void vApplicationIdleHook(void)
+{
+//	printf("Idle\r\n");
+}
+#endif
+
+
+
